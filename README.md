@@ -1,4 +1,4 @@
-# epack-collider
+# epuck-collider
 Boxes check via E-Pack robot
 
 # Objective
