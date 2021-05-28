@@ -14,10 +14,36 @@
 #define LEDS 10
 
 
-typedef struct DetectorDeObstaculo{
-  bool direita;
-  bool esquerda;
-} DetectorDeObstaculo;
+void moveRobo( WbDeviceTag* esquerdaMotor, WbDeviceTag* direitaMotor, WbDeviceTag* proximitySensors){
+  
+  double esquerdaSpeed  = 0.3 * MAX_SPEED;
+  double direitaSpeed = 0.3 * MAX_SPEED;
+  double proximitySensorValues[8];
+ 
+  for (int i = 0; i < 8 ; i++){
+      proximitySensorValues[i] = wb_distance_sensor_get_value(proximitySensors[i]);
+  }
+  
+  if (proximitySensorValues[5] > 100 ||
+      proximitySensorValues[6] > 100 ||
+      proximitySensorValues[7] > 100 ||
+      proximitySensorValues[4] > 100 ) {
+      esquerdaSpeed  += 0.3 * MAX_SPEED;
+      direitaSpeed -= 0.3 * MAX_SPEED;
+   }
+  
+   else if (proximitySensorValues[0] > 100 ||
+      proximitySensorValues[1] > 100 ||
+      proximitySensorValues[2] > 100 ||
+      proximitySensorValues[3] > 100 ) {
+      esquerdaSpeed  -= 0.3 * MAX_SPEED;
+      direitaSpeed += 0.3 * MAX_SPEED;
+   }
+   
+   wb_motor_set_velocity(*esquerdaMotor, esquerdaSpeed);
+   wb_motor_set_velocity(*direitaMotor, direitaSpeed);
+
+}
 
 
 static int get_time_step() {
@@ -41,41 +67,35 @@ static void passive_wait(double sec) {
     } while (start_time + sec > wb_robot_get_time());
 }
 
-void verificaColisao(WbDeviceTag* proximitySensors, WbFieldRef* boxFields, double** boxInitialPositions, WbDeviceTag* ledsVector){
+void verificaColisao(
+  WbDeviceTag* proximitySensors, 
+  WbFieldRef* boxFields, 
+  double** boxInitialPositions,
+  WbDeviceTag* ledsVector,
+  WbNodeRef* robot){
   
-  bool colidiu = false;
-  bool caixaLeve = false;
-  
+  WbFieldRef robot_field = wb_supervisor_node_get_field(robot, "translation");
+  const double* posicaoRobo = wb_supervisor_field_get_sf_vec3f(robot_field);
   for(int i = 0; i < 8; i++){
   
     float sensorValue = wb_distance_sensor_get_value(proximitySensors[i]);
     
     if(sensorValue > 100){
-        colidiu = true;
-        break; 
+        for(int i = 0; i < 9; i++){
+    
+          double* posicaoBox = wb_supervisor_field_get_sf_vec3f(boxFields[i]);
+               
+          for(int j = 0; j < 3; j++){
+              if(posicaoBox[j] != boxInitialPositions[i][j] && (posicaoBox[2] <= posicaoRobo[2]+0.2 && posicaoBox[2] >= posicaoRobo[2]-0.2)){        
+                fireLed(ledsVector);
+                atualizaPosicaoCaixa(boxInitialPositions[i],posicaoBox);
+                break;
+              }  
+          }
+          break; 
+        }
+  
     }
-  
-  }
-  
-  if(colidiu){
-     printf("Coldi!!");
-     for(int i = 0; i < 9; i++){
-    
-        double* posicaoBox = wb_supervisor_field_get_sf_vec3f(boxFields[i]);
-             
-        for(int j = 0; j < 3; j++){
-    
-            if(posicaoBox[j] != boxInitialPositions[i][j]){        
-              caixaLeve = true;
-              atualizaPosicaoCaixa(boxInitialPositions[i],posicaoBox);
-              break;
-            }  
-        } 
-     }
-     
-     if(caixaLeve){
-       fireLed(ledsVector);
-     }            
   }
 }
 
@@ -138,29 +158,6 @@ void defineCaixasPosicaoInicial(WbFieldRef* boxFields, double** boxInitialPositi
   }
 }
 
-void verificaObstaculos(WbDeviceTag* proximitySensors, DetectorDeObstaculo* DetectorDeObstaculo){
-
-  double proximitySensorValues[8];
- 
-  for (int i = 0; i < 8 ; i++){
-      proximitySensorValues[i] = wb_distance_sensor_get_value(proximitySensors[i]);
-  }
-  
-  bool direita =
-      proximitySensorValues[0] > 80.0 ||
-      proximitySensorValues[1] > 80.0 ||
-      proximitySensorValues[2] > 80.0;
-      
-  bool esquerda =
-      proximitySensorValues[5] > 80.0 ||
-      proximitySensorValues[6] > 80.0 ||
-      proximitySensorValues[7] > 80.0;
-      
-  DetectorDeObstaculo->direita = direita;
-  DetectorDeObstaculo->esquerda = esquerda;
-       
-}
-
 
 double** matrixBase(int l, int c){
 
@@ -194,32 +191,9 @@ void defineLed(WbDeviceTag* ledsVector) {
     wb_led_set(ledsVector[i], false);
 }
 
-
-
-void defineVeloRobo(DetectorDeObstaculo* obstacle, WbDeviceTag* esquerdaMotor, WbDeviceTag* direitaMotor){
-  
-  double esquerdaSpeed  = 0.5 * MAX_SPEED;
-  double direitaSpeed = 0.5 * MAX_SPEED;
-  
-   if (obstacle->esquerda) {
-      esquerdaSpeed  += 0.5 * MAX_SPEED;
-      direitaSpeed -= 0.5 * MAX_SPEED;
-   }
-  
-   else if (obstacle->direita) {
-      esquerdaSpeed  -= 0.5 * MAX_SPEED;
-      direitaSpeed += 0.5 * MAX_SPEED;
-   }
-   
-   wb_motor_set_velocity(*esquerdaMotor, esquerdaSpeed);
-   wb_motor_set_velocity(*direitaMotor, direitaSpeed);
-
-}
-
 int main(int argc, char **argv) {
  
   wb_robot_init();
-  DetectorDeObstaculo* DetectorDeObstaculo = malloc(sizeof(DetectorDeObstaculo));
   
   WbDeviceTag esquerda_motor = wb_robot_get_device("left wheel motor");
   WbDeviceTag direita_motor = wb_robot_get_device("right wheel motor");
@@ -244,12 +218,11 @@ int main(int argc, char **argv) {
   while (wb_robot_step(TIME_STEP) != -1) {
     
     defineLed(leds);
-    verificaObstaculos(proximitySensors, DetectorDeObstaculo);
-    defineVeloRobo(DetectorDeObstaculo, &esquerda_motor, &direita_motor); 
-    verificaColisao(proximitySensors,boxFields,boxInitialPositions,leds);
+    moveRobo(&esquerda_motor, &direita_motor,proximitySensors); 
+    verificaColisao(proximitySensors,boxFields,boxInitialPositions,leds, robot_node);
    
   }
- 
+  
   wb_robot_cleanup();
   return 0;
 }
