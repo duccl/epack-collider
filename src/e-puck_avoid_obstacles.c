@@ -95,7 +95,7 @@ void verificaColisao(
               printf("Detecting a collision of %f to position\n", posicaoBox[j]);
               printf("Box initial positional was %f\n", boxInitialPositions[i][j]);
               if(posicaoBox[j] != boxInitialPositions[i][j] && (posicaoBox[j] <= posicaoRobo[j]+0.001 || posicaoBox[j] >= posicaoRobo[j]-0.001)){              
-                printf("Bagui leve mano\n");
+                printf("Whoa! Levissimo\n");
                 fireLed(ledsVector);
                 hit = true;
                 break;
