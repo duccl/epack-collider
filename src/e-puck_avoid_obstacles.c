@@ -13,39 +13,6 @@
 #define MAX_SPEED 6.28
 #define LEDS 10
 
-
-void moveRobo( WbDeviceTag* esquerdaMotor, WbDeviceTag* direitaMotor, WbDeviceTag* proximitySensors){
-  
-  double esquerdaSpeed  = 0.3 * MAX_SPEED;
-  double direitaSpeed = 0.3 * MAX_SPEED;
-  double proximitySensorValues[8];
- 
-  for (int i = 0; i < 8 ; i++){
-      proximitySensorValues[i] = wb_distance_sensor_get_value(proximitySensors[i]);
-  }
-  
-  if (proximitySensorValues[5] > 100 ||
-      proximitySensorValues[6] > 100 ||
-      proximitySensorValues[7] > 100 ||
-      proximitySensorValues[4] > 100 ) {
-      esquerdaSpeed  += 0.3 * MAX_SPEED;
-      direitaSpeed -= 0.3 * MAX_SPEED;
-   }
-  
-   else if (proximitySensorValues[0] > 100 ||
-      proximitySensorValues[1] > 100 ||
-      proximitySensorValues[2] > 100 ||
-      proximitySensorValues[3] > 100 ) {
-      esquerdaSpeed  -= 0.3 * MAX_SPEED;
-      direitaSpeed += 0.3 * MAX_SPEED;
-   }
-   
-   wb_motor_set_velocity(*esquerdaMotor, esquerdaSpeed);
-   wb_motor_set_velocity(*direitaMotor, direitaSpeed);
-
-}
-
-
 static int get_time_step() {
     static int time_step = -1;
     if (time_step == -1)
@@ -67,6 +34,45 @@ static void passive_wait(double sec) {
     } while (start_time + sec > wb_robot_get_time());
 }
 
+
+void fireLed(WbDeviceTag* ledsVector) {
+  for (int i = 0; i < LEDS; i++){
+    wb_led_set(ledsVector[i], true);
+    passive_wait(0.5);
+  }
+}
+
+void moveRobo( WbDeviceTag* esquerdaMotor, WbDeviceTag* direitaMotor, WbDeviceTag* proximitySensors){
+  
+  double esquerdaSpeed  = 0.3 * MAX_SPEED;
+  double direitaSpeed = 0.3 * MAX_SPEED;
+  double proximitySensorValues[8];
+ 
+  for (int i = 0; i < 8 ; i++){
+      proximitySensorValues[i] = wb_distance_sensor_get_value(proximitySensors[i]);
+  }
+  
+  if (proximitySensorValues[5] > 120 ||
+      proximitySensorValues[6] > 120 ||
+      proximitySensorValues[7] > 120 ||
+      proximitySensorValues[4] > 120 ) {
+      esquerdaSpeed  += 0.3 * MAX_SPEED;
+      direitaSpeed -= 0.3 * MAX_SPEED;
+   }
+  
+   else if (proximitySensorValues[0] > 120 ||
+      proximitySensorValues[1] > 120 ||
+      proximitySensorValues[2] > 120 ||
+      proximitySensorValues[3] > 120 ) {
+      esquerdaSpeed  -= 0.3 * MAX_SPEED;
+      direitaSpeed += 0.3 * MAX_SPEED;
+   }
+   
+   wb_motor_set_velocity(*esquerdaMotor, esquerdaSpeed);
+   wb_motor_set_velocity(*direitaMotor, direitaSpeed);
+
+}
+
 void verificaColisao(
   WbDeviceTag* proximitySensors, 
   WbFieldRef* boxFields, 
@@ -79,32 +85,34 @@ void verificaColisao(
   for(int i = 0; i < 8; i++){
   
     float sensorValue = wb_distance_sensor_get_value(proximitySensors[i]);
-    
-    if(sensorValue > 100){
+    bool hit = false;
+    if(sensorValue > 110){
         for(int i = 0; i < 9; i++){
     
           double* posicaoBox = wb_supervisor_field_get_sf_vec3f(boxFields[i]);
-               
+             
           for(int j = 0; j < 3; j++){
-              if(posicaoBox[j] != boxInitialPositions[i][j] && (posicaoBox[2] <= posicaoRobo[2]+0.2 && posicaoBox[2] >= posicaoRobo[2]-0.2)){        
+              printf("Detecting a collision of %f to position\n", posicaoBox[j]);
+              printf("Box initial positional was %f\n", boxInitialPositions[i][j]);
+              if(posicaoBox[j] != boxInitialPositions[i][j] && (posicaoBox[j] <= posicaoRobo[j]+0.001 || posicaoBox[j] >= posicaoRobo[j]-0.001)){              
+                printf("Bagui leve mano\n");
                 fireLed(ledsVector);
-                atualizaPosicaoCaixa(boxInitialPositions[i],posicaoBox);
+                hit = true;
                 break;
-              }  
+              }
           }
-          break; 
+          
+          if(hit)
+            break;
         }
-  
+        for(int i = 0; i < 9; i++){
+          double* posicaoBox = wb_supervisor_field_get_sf_vec3f(boxFields[i]);
+          for(int k = 0; k<3;k++){
+             boxInitialPositions[i][k] = posicaoBox[k];  
+          }  
+        }
     }
   }
-}
-
-void atualizaPosicaoCaixa(double* boxInitialPosition, double* boxCurrentPosition){
-
-  for(int i = 0; i < 3; i++){ 
-     boxInitialPosition[i] = boxCurrentPosition[i];  
-  }
-
 }
 
 void setupSensors(WbDeviceTag* proximitySensors){
@@ -151,13 +159,25 @@ void defineCaixasPosicaoInicial(WbFieldRef* boxFields, double** boxInitialPositi
     double* posicao_box = wb_supervisor_field_get_sf_vec3f(boxFields[i]);
     
     for(int j = 0; j < 3; j++){
-    
        boxInitialPositions[i][j] = posicao_box[j];
  
     }
   }
 }
 
+void LogCaixasPosition(WbFieldRef* boxFields, double** boxInitialPositions){
+  char names[9][12] = {
+    "caixinha_1", "caixinha_2", "caixinha_3", "caixinha_4",
+    "caixinha_5", "caixinha_6", "caixinha_7", "caixinha_8","caixinha_9"
+  };
+  for(int i = 0; i < 9; i++){
+    double* posicao_box = wb_supervisor_field_get_sf_vec3f(boxFields[i]);
+    printf("%s box \n",names[i]);
+    for(int j = 0; j < 3; j++){
+       printf("%f pos atual, pos inicial %f\n",posicao_box[j],boxInitialPositions[i][j]);
+    }
+  }
+}
 
 double** matrixBase(int l, int c){
 
@@ -179,20 +199,13 @@ void setupLeds(WbDeviceTag* ledsVector){
     ledsVector[i] = wb_robot_get_device(leds_names[i]);
 }
 
-
-void fireLed(WbDeviceTag* ledsVector) {
-  for (int i = 0; i < LEDS; i++)
-    wb_led_set(ledsVector[i], true);
-    passive_wait(0.5);
-}
-
 void defineLed(WbDeviceTag* ledsVector) {
   for (int i = 0; i < LEDS; i++)
     wb_led_set(ledsVector[i], false);
 }
 
 int main(int argc, char **argv) {
- 
+  fflush(stdout);
   wb_robot_init();
   
   WbDeviceTag esquerda_motor = wb_robot_get_device("left wheel motor");
@@ -220,7 +233,7 @@ int main(int argc, char **argv) {
     defineLed(leds);
     moveRobo(&esquerda_motor, &direita_motor,proximitySensors); 
     verificaColisao(proximitySensors,boxFields,boxInitialPositions,leds, robot_node);
-   
+    LogCaixasPosition(boxFields, boxInitialPositions);
   }
   
   wb_robot_cleanup();
